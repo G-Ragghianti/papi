@@ -38,6 +38,7 @@ typedef struct command_flags
 	int details;
 	int named;
 	char *name;
+	char *comp;
 } command_flags_t;
 
 static void force_cmp_init(int cid);
@@ -47,7 +48,7 @@ print_help( char **argv )
 {
 	printf( "This is the PAPI component avail program.\n" );
 	printf( "It provides availability of installed PAPI components.\n" );
-	printf( "Usage: %s [options]\n", argv[0] );
+	printf( "Usage: %s [options] [component]\n", argv[0] );
 	printf( "Options:\n\n" );
 	printf( "  --help, -h    print this help message\n" );
 	printf( "  -d            print detailed information on each component\n" );
@@ -60,13 +61,19 @@ parse_args( int argc, char **argv, command_flags_t * f )
 
 	/* Look for all currently defined commands */
 	memset( f, 0, sizeof ( command_flags_t ) );
+	f->comp = "";
 	for ( i = 1; i < argc; i++ ) {
 		if ( !strcmp( argv[i], "-d" ) ) {
 			f->details = 1;
 		} else if ( !strcmp( argv[i], "-h" ) || !strcmp( argv[i], "--help" ) )
 			f->help = 1;
-		else
+		else if ( argv[i][0] == '-' ) {
 			printf( "%s is not supported\n", argv[i] );
+			exit ( 1 );
+		}
+		else
+			// Parse component names
+			f->comp = argv[i];
 	}
 
 	/* if help requested, print and bail */
@@ -115,7 +122,7 @@ main( int argc, char **argv )
 	printf("Compiled-in components:\n");
 	for ( cid = 0; cid < numcmp; cid++ ) {
 	  cmpinfo = PAPI_get_component_info( cid );
-
+	  if ( strcmp(flags.comp, "\0") != 0 && strcmp(flags.comp, cmpinfo->name) != 0 ) continue;
 	  printf( "Name:   %-23s %s\n", cmpinfo->name ,cmpinfo->description);
 
 	  if (cmpinfo->disabled == PAPI_EDELAY_INIT) {
@@ -139,11 +146,17 @@ main( int argc, char **argv )
 
 	printf("\nActive components:\n");
 	numcmp = PAPI_num_components(  );
-
+	int retc = 1;
 	for ( cid = 0; cid < numcmp; cid++ ) {
 	  cmpinfo = PAPI_get_component_info( cid );
 	  if (cmpinfo->disabled) continue;
-
+          if ( strcmp(flags.comp, "\0") != 0) {
+	    if ( strcmp(flags.comp, cmpinfo->name) != 0 )
+	      continue;
+	    else
+	      retc = 0;
+	  }
+	  retc = 0;
 	  printf( "Name:   %-23s %s\n", cmpinfo->name ,cmpinfo->description);
 	  printf( "        %-23s Native: %d, Preset: %d, Counters: %d\n",
 		  " ", cmpinfo->num_native_events, cmpinfo->num_preset_events, cmpinfo->num_cntrs);
@@ -190,8 +203,7 @@ main( int argc, char **argv )
 
 	printf
 	  ( "\n--------------------------------------------------------------------------------\n" );
-
-	return 0;
+	return retc;
 }
 
 void force_cmp_init(int cid)
